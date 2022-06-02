@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package node_exporter
 
 import (
 	"fmt"
@@ -140,7 +140,7 @@ func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
 	return handler, nil
 }
 
-func main() {
+func Start() {
 	var (
 		listenAddress = kingpin.Flag(
 			"web.listen-address",
@@ -185,8 +185,9 @@ func main() {
 		level.Warn(logger).Log("msg", "Node Exporter is running as root user. This exporter is designed to run as unpriviledged user, root is not required.")
 	}
 
-	http.Handle(*metricsPath, newHandler(!*disableExporterMetrics, *maxRequests, logger))
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.Handle(*metricsPath, newHandler(!*disableExporterMetrics, *maxRequests, logger))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html>
 			<head><title>Node Exporter</title></head>
 			<body>
@@ -197,9 +198,14 @@ func main() {
 	})
 
 	level.Info(logger).Log("msg", "Listening on", "address", *listenAddress)
-	server := &http.Server{Addr: *listenAddress}
+	server := &http.Server{
+		Addr:    *listenAddress,
+		Handler: mux,
+	}
+
 	if err := web.ListenAndServe(server, *configFile, logger); err != nil {
 		level.Error(logger).Log("err", err)
 		os.Exit(1)
 	}
 }
+
